@@ -1,0 +1,48 @@
+project_name: "marketing_creative_generator"
+project_version: "1.0.0"
+
+# Data Configuration
+data:
+  num_records: 50
+  output_path: "data/training_data.csv"
+  version_file: "data/dataset_version.txt"
+  
+# Model Configuration
+model:
+  model_type: "distilbert"  # Using DistilBERT for efficiency
+  pretrained_model: "distilbert-base-uncased"
+  max_length: 128
+  batch_size: 16
+  epochs: 3
+  learning_rate: 2e-5
+  
+# MLflow Configuration
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "marketing_creative_generator"
+  artifact_path: "mlflow_artifacts"
+  registry_path: "mlflow_registry"
+  
+# Model Registry Configuration
+model_registry:
+  model_name: "marketing_creative_model"
+  local_model_path: "models/best_model.pkl"
+  
+# Inference Flask Configuration
+inference:
+  host: "0.0.0.0"
+  port: 5001
+  debug: false
+  
+# Airflow Configuration
+airflow:
+  dag_id: "marketing_creative_pipeline"
+  data_generation_url: "http://localhost:5000/generate_data"
+  schedule_interval: "0 0 * * *"  # Daily at midnight
+  max_active_runs: 1
+  
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  log_file: "logs/pipeline.log"
