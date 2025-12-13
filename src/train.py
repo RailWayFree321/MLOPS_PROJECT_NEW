@@ -113,9 +113,10 @@ class MarketingCreativeModel:
         
         # Create training dataset
         class CustomDataset(torch.utils.data.Dataset):
-            def __init__(self, encodings, labels):
+            def __init__(self, encodings, labels, device):
                 self.encodings = encodings
                 self.labels = torch.tensor(labels)
+                self.device = device
             
             def __getitem__(self, idx):
                 item = {key: val[idx].to(self.device) for key, val in self.encodings.items()}
@@ -125,13 +126,13 @@ class MarketingCreativeModel:
             def __len__(self):
                 return len(self.labels)
         
-        train_dataset = CustomDataset(train_encodings, y_train)
-        val_dataset = CustomDataset(val_encodings, y_val)
+        train_dataset = CustomDataset(train_encodings, y_train, self.device)
+        val_dataset = CustomDataset(val_encodings, y_val, self.device)
         
         # Training loop
-        batch_size = self.model_config.get("batch_size", 16)
-        epochs = self.model_config.get("epochs", 3)
-        learning_rate = self.model_config.get("learning_rate", 2e-5)
+        batch_size = int(self.model_config.get("batch_size", 16))
+        epochs = int(self.model_config.get("epochs", 3))
+        learning_rate = float(self.model_config.get("learning_rate", 2e-5))
         
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)

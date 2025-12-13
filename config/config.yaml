@@ -14,13 +14,13 @@ model:
   max_length: 128
   batch_size: 16
   epochs: 3
-  learning_rate: 2e-5
+  learning_rate: 0.00002
   
 # MLflow Configuration
 mlflow:
   tracking_uri: "http://localhost:5000"
   experiment_name: "marketing_creative_generator"
-  artifact_path: "mlflow_artifacts"
+  name: "model"
   registry_path: "mlflow_registry"
   
 # Model Registry Configuration
@@ -37,7 +37,7 @@ inference:
 # Airflow Configuration
 airflow:
   dag_id: "marketing_creative_pipeline"
-  data_generation_url: "http://localhost:5000/generate_data"
+  data_generation_url: "http://localhost:5002/generate_data"
   schedule_interval: "0 0 * * *"  # Daily at midnight
   max_active_runs: 1
   
