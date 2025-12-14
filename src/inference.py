@@ -7,10 +7,13 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Any
+import time
+from functools import wraps
 
 from flask import Flask, request, jsonify
 from datetime import datetime
 import os
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +24,69 @@ app = Flask(__name__)
 # Model storage
 MODEL = None
 MODEL_VERSION = None
-MODEL_PATH = os.getenv("MODEL_PATH", "/app/models/best_model")
+MODEL_PATH = os.getenv("MODEL_PATH", "models/best_model")
+
+# Prometheus metrics
+inference_counter = Counter(
+    'model_inference_total',
+    'Total number of inferences',
+    ['endpoint', 'status']
+)
+
+inference_latency = Histogram(
+    'model_inference_duration_seconds',
+    'Inference latency in seconds',
+    ['endpoint'],
+    buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0)
+)
+
+inference_errors = Counter(
+    'model_inference_errors_total',
+    'Total number of inference errors',
+    ['endpoint', 'error_type']
+)
+
+throughput_gauge = Gauge(
+    'model_inference_throughput_requests_per_minute',
+    'Inference throughput (requests per minute)'
+)
+
+model_quality_gauge = Gauge(
+    'model_quality_score',
+    'Model quality score (0-1)',
+    ['model_version']
+)
+
+model_loaded_gauge = Gauge(
+    'model_loaded',
+    'Whether model is loaded (1=yes, 0=no)'
+)
+
+
+def track_metrics(endpoint_name):
+    """Decorator to track metrics for endpoints"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            start_time = time.time()
+            try:
+                result = f(*args, **kwargs)
+                latency = time.time() - start_time
+                inference_latency.labels(endpoint=endpoint_name).observe(latency)
+                
+                # Extract status code from response
+                status = 'success'
+                if isinstance(result, tuple) and len(result) >= 2:
+                    status_code = result[1]
+                    status = 'success' if status_code < 400 else 'error'
+                
+                inference_counter.labels(endpoint=endpoint_name, status=status).inc()
+                return result
+            except Exception as e:
+                inference_errors.labels(endpoint=endpoint_name, error_type=type(e).__name__).inc()
+                raise
+        return decorated_function
+    return decorator
 
 
 def load_model():
@@ -36,6 +101,7 @@ def load_model():
         # Check if model path exists
         if not Path(MODEL_PATH).exists():
             logger.warning(f"Model path does not exist: {MODEL_PATH}")
+            model_loaded_gauge.set(0)
             return False
         
         # For now, we'll use a placeholder since we're using transformers
@@ -53,11 +119,16 @@ def load_model():
         else:
             MODEL_VERSION = "unknown"
         
+        # Set quality score based on model version (simulated)
+        model_quality_gauge.labels(model_version=MODEL_VERSION).set(0.87)
+        model_loaded_gauge.set(1)
+        
         logger.info(f"Model loaded successfully. Version: {MODEL_VERSION}")
         return True
     
     except Exception as e:
         logger.error(f"Failed to load model: {str(e)}")
+        model_loaded_gauge.set(0)
         return False
 
 
@@ -125,27 +196,11 @@ def readiness_probe():
 @app.route("/metrics", methods=["GET"])
 def metrics():
     """Prometheus metrics endpoint"""
-    metrics_text = """# HELP model_inference_total Total number of inferences
-# TYPE model_inference_total counter
-model_inference_total 0
-
-# HELP model_inference_errors_total Total number of inference errors
-# TYPE model_inference_errors_total counter
-model_inference_errors_total 0
-
-# HELP model_inference_duration_seconds Inference latency in seconds
-# TYPE model_inference_duration_seconds histogram
-model_inference_duration_seconds_bucket{le="0.1"} 0
-model_inference_duration_seconds_bucket{le="0.5"} 0
-model_inference_duration_seconds_bucket{le="1.0"} 0
-model_inference_duration_seconds_bucket{le="+Inf"} 0
-model_inference_duration_seconds_sum 0
-model_inference_duration_seconds_count 0
-"""
-    return metrics_text, 200, {"Content-Type": "text/plain"}
+    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
 
 @app.route("/predict", methods=["POST"])
+@track_metrics("predict")
 def predict():
     """
     Generate marketing creative
@@ -208,6 +263,7 @@ def predict():
 
 
 @app.route("/batch_predict", methods=["POST"])
+@track_metrics("batch_predict")
 def batch_predict():
     """
     Generate marketing creatives for multiple products
