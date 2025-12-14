@@ -59,6 +59,12 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     
+    - name: Download model from Google Drive
+      run: |
+        pip install gdown
+        mkdir -p models
+        gdown 1zmEd2fq-490qcF8qsm1iuUR6fd4QGd4B -O models/best_model --folder
+    
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v4
